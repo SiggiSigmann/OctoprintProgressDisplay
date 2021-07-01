@@ -2,5 +2,5 @@
 #define PASSWORD "*****************************"
 
 #define APIKEY "*****************************";
-#define HOST = "http://***.***.***.***";
-#define PORT = 80;
+#define HOST "http://***.***.***.***";
+#define PORT 80;
