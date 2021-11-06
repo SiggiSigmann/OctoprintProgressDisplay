@@ -106,6 +106,7 @@ void setup() {
 
   //connect to wifi
   WiFi.mode(WIFI_STA);
+  //wifiManager.resetSettings();                                //reset Wifimanager => credentials will be deleted
   wifiManager.setConfigPortalBlocking(false);
   wifiManager.setBreakAfterConfig(true);
   wifiManager.setSaveParamsCallback(saveParamsCallback);
