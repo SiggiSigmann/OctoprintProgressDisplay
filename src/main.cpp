@@ -1,27 +1,35 @@
 #include <Arduino.h>
+
+//wifi
 #include <ESP8266WiFi.h>
-#include <ESP8266WiFiMulti.h>
+
+//wifimanager
+#include <WiFiManager.h>
+
+//Rest client
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
+
+//SSID PWD OctoprintIP KEY
 #include "secrets.h"
 
-//connection and tcp stuff
-ESP8266WiFiMulti WiFiMulti;
+//connection to shiftregister
+#define SHIFTPIN 13
+#define STOREPIN 15
+#define DATAPIN 2
+
+//store rest answere
 StaticJsonDocument<1200> doc;
 
-//connection to shiftregister
-int shiftPin = 13;
-int storePin = 15;
-int dataPin = 2;
-
 //drawing to display
-int dot = B00000001;
-int e = B11101100;
-int r = B10001000;
+byte dot = B00000001;
+byte e = B11101100;
+byte r = B10001000;
+
 //Bxxxxxxx1
 // GFABEDC.
-int numbers[]= {B01111110, //0
+byte numbers[]= {B01111110, //0
                 B00010010, //1
                 B10111100, //2
                 B10110110, //3
@@ -32,7 +40,7 @@ int numbers[]= {B01111110, //0
                 B11111110, //8
                 B11110110};//9
 
-int ring[]= {B00000100,
+byte ring[]= {B00000100,
               B00001100,
               B01001100,
               B01101100,
@@ -43,37 +51,67 @@ int ring[]= {B00000100,
 const String apikey = APIKEY;
 const String host = HOST;
 
+//wifimanager
+WiFiManager wifiManager;
+
+//store if bed and hotend is heating
+byte heating[2] = {0,0};
+
+//store temperature
+float bedTarget = 0;
+float bedTemperature = 0;
+float toolTarget = 0;
+float toolTemperature = 0;
+
+//clients
+WiFiClient client;
+HTTPClient http;
+
+//timer
+#define UPDATETIME 500
+unsigned long updateTimer = 0;
+
+//isWificonnected
+boolean isWificonnected = 0;
+
+//count for waiting till wifi animation
+byte count = 0;
+#define BLINKTIMER 100
+
 //prototypes
+void updateTemperature();
+void updateJob();
+
+//calback
+void saveParamsCallback();
+
+//7 Segemnts methods
 void printTo7Segment(int vlaue);
 void lowlineTo7Segment();
 void errorTo7Segment();
 int createnumber(int input);
-
+void cleartSegment();
 
 void setup() {
-  //pins
-  pinMode(storePin, OUTPUT);
-  pinMode(shiftPin, OUTPUT);
-  pinMode(dataPin, OUTPUT);
-  pinMode(12, INPUT);
-  pinMode(14, OUTPUT);
-  Serial.begin(115200);
-  Serial.println("start");
+  //Serial.begin(115200);
+  //Serial.println("start");
 
-  //init 7 segments
+  //pins
+  pinMode(STOREPIN, OUTPUT);
+  pinMode(SHIFTPIN, OUTPUT);
+  pinMode(DATAPIN, OUTPUT);
+
+  //init 7 segments (all on)
   printTo7Segment( 0xFFFF );
 
-  //connect to wifi (dots of the displays will blink)
-  WiFi.begin(SSID, PASSWORD);
-  byte count = 0;
-  while (WiFi.status() != WL_CONNECTED) {
-    printTo7Segment(dot<<(count*8));
-    
-    count++;
-    if(count > 1){
-      count = 0;
-    }
-    delay(100);
+  //connect to wifi
+  WiFi.mode(WIFI_STA);
+  wifiManager.setConfigPortalBlocking(false);
+  wifiManager.setBreakAfterConfig(true);
+  wifiManager.setSaveParamsCallback(saveParamsCallback);
+  wifiManager.setClass("invert"); // dark theme
+  if(wifiManager.autoConnect("OctoPrintProgressDisplay")){
+    isWificonnected = 1;
   }
 
   //write 0
@@ -82,18 +120,42 @@ void setup() {
   Serial.println(WiFi.localIP());
 }
 
-int heating[2] = {0,0};
-
 void loop() {
-  float bedTarget = 0;
-  float bedTemperature = 0;
-  float toolTarget = 0;
-  float toolTemperature = 0;
+  if(isWificonnected){
+    //get data and display it
+    if((millis()-updateTimer) > UPDATETIME){
+      updateTemperature();
+      updateJob();
+
+      updateTimer = millis();
+    }
+
+  }else{
+    if((millis()-updateTimer) > BLINKTIMER){
+      //make donts blink
+      printTo7Segment(dot<<(count*8));
+      count++;
+      if(count > 1){
+        count = 0;
+      }
+
+      updateTimer = millis();
+    }
+
+    //process wifi manager and show waiting animation
+    wifiManager.process();
+  }
   
-  //create clients
-  WiFiClient client;
-  HTTPClient http;
-  
+}
+
+//calback from Wifimanager
+void saveParamsCallback () {
+  isWificonnected = 1;
+  cleartSegment();
+}
+
+//get Termperature from Octoprint via rest call
+void updateTemperature(){
   //make an api call for temperature
   if(http.begin(client, host + "/api/printer?apikey=" + apikey)){
 
@@ -106,7 +168,7 @@ void loop() {
         String payload = http.getString();
         DeserializationError error = deserializeJson(doc, payload);
         
-        //handel error and retry
+        //handel and sktip
         if (error) {
           http.end();
           errorTo7Segment();
@@ -130,9 +192,18 @@ void loop() {
       //print error
       errorTo7Segment();
     }
-    http.end();
+  }else{
+    //reset temperature
+    bedTarget = 0;
+    bedTemperature = 0;
+    toolTarget = 0;
+    toolTemperature = 0;
   }
-  
+  http.end();
+}
+
+//get job percentage
+void updateJob(){
   //get jobs
   if(http.begin(client, host + "/api/job?apikey=" + apikey)){
 
@@ -143,6 +214,7 @@ void loop() {
         String payload = http.getString();
         DeserializationError error = deserializeJson(doc, payload);
         
+        //check if answere is correct or skip
         if (error) {
           http.end();
           errorTo7Segment();
@@ -171,8 +243,8 @@ void loop() {
               bednum=1;
             }
             
-            Serial.print(bednum);
-            Serial.println(toolnum);
+            //Serial.print(bednum);
+            //Serial.println(toolnum);
 
             //display information ( heating progress)
             printTo7Segment(((ring[toolnum-1])<<8)+(ring[bednum-1]));
@@ -194,8 +266,8 @@ void loop() {
             }
             
             //print information
-            Serial.print(bednum);
-            Serial.println(toolnum);
+            //Serial.print(bednum);
+            //Serial.println(toolnum);
             printTo7Segment(((ring[toolnum-1])<<8)+(ring[bednum-1]));
           }else{
             //print idel status
@@ -210,42 +282,53 @@ void loop() {
       //print error
       errorTo7Segment();
     }
-    http.end();
   }
-  delay(500);
+  http.end();
 }
 
 //print value to 7 segment display
+//value must resembel the encoding
 void printTo7Segment(int vlaue){
-  digitalWrite(storePin, LOW);
-  shiftOut(dataPin, shiftPin, MSBFIRST, (vlaue & 0xFF) | heating[0]);
-  shiftOut(dataPin, shiftPin, MSBFIRST, ((vlaue & 0xFF00)>>8)| heating[1]);
-  digitalWrite(storePin, HIGH);
+  digitalWrite(STOREPIN, LOW);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, (vlaue & 0xFF) | heating[0]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, ((vlaue & 0xFF00)>>8)| heating[1]);
+  digitalWrite(STOREPIN, HIGH);
 }
 
 //print "ER" to display
 void errorTo7Segment(){
-  digitalWrite(storePin, LOW);
-  shiftOut(dataPin, shiftPin, MSBFIRST, r| heating[0]);
-  shiftOut(dataPin, shiftPin, MSBFIRST, e| heating[1]);
-  digitalWrite(storePin, HIGH);
+  digitalWrite(STOREPIN, LOW);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, r| heating[0]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, e| heating[1]);
+  digitalWrite(STOREPIN, HIGH);
 }
 
-//print "__" to diaply
+//print "_ _" to diaply
 void lowlineTo7Segment(){
-  digitalWrite(storePin, LOW);
-  shiftOut(dataPin, shiftPin, MSBFIRST, 0x4| heating[0]);
-  shiftOut(dataPin, shiftPin, MSBFIRST, 0x4| heating[1]);
-  digitalWrite(storePin, HIGH);
+  digitalWrite(STOREPIN, LOW);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| heating[0]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| heating[1]);
+  digitalWrite(STOREPIN, HIGH);
+}
+
+//print "_ _" to diaply
+void cleartSegment(){
+  digitalWrite(STOREPIN, LOW);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0);
+  digitalWrite(STOREPIN, HIGH);
 }
 
 //create number to print
 int createnumber(int input){
-  int zehn = (input / 10)%100;
-  int zehnZahl = numbers[zehn]<<8;
+  //process left Digit
+  byte leftDigit = (input / 10)%100;
+  byte leftDigitEncoding = numbers[leftDigit]<<8;
   
-  int einz = input % 10;
-  int einzZahl = numbers[einz];
+  //process right digit
+  byte rightDigit = input % 10;
+  byte rightDigitEncoding = numbers[rightDigit];
   
-  return zehnZahl | einzZahl;
+  //clac value for shifting to display
+  return leftDigitEncoding | rightDigitEncoding;
 }
