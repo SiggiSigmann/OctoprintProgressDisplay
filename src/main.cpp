@@ -113,12 +113,11 @@ void setup() {
   wifiManager.setClass("invert"); // dark theme
   if(wifiManager.autoConnect("OctoPrintProgressDisplay")){
     isWificonnected = 1;
+    //Serial.println(WiFi.localIP());
   }
 
   //write 0
   printTo7Segment(0);
-  
-  Serial.println(WiFi.localIP());
 }
 
 void loop() {
@@ -152,6 +151,7 @@ void loop() {
 //calback from Wifimanager
 void saveParamsCallback () {
   isWificonnected = 1;
+  //Serial.println(WiFi.localIP());
   cleartSegment();
 }
 
