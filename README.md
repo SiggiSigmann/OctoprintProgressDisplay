@@ -15,20 +15,20 @@ To get Wifi-Conection a WifiManager form tzapu is used.
 
 
 	1. Connect to wifi with the name **OctoPrintProgressDisplay**
-	<br>
-	<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step1.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
+<br>
+<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step1.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
 
 	2. Go to Sign in Page and selekt **Configure Wifi**
-	<br>
-	<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step2.jpg" alt="SignIn" title="SignIn" width="25%"/>
+<br>
+<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step2.jpg" alt="SignIn" title="SignIn" width="25%"/>
 
 	3. Connect to Wifi
-	<br>
-	<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step3.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
+<br>
+<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step3.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
 
 	4. Done. The Connection will be stored to reuse next time
-	<br>
-	<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step4.jpg" alt="Done" title="Done" width="25%"/>
+<br>
+<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step4.jpg" alt="Done" title="Done" width="25%"/>
 
 3.  If the devoice can't connect to Octoprint it will display error 
 <br>
