@@ -42,5 +42,5 @@ To get Wifi-Conection a WifiManager form tzapu is used.
 10. If Octoprint is in idel mode this will be displayed.<br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/Display_idel.jpg" alt="Idel" title="Idel" width="25%" style="transform:rotate(-90deg);"/>
 ## Circuit
-![Circuit image](https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/circuit.jpg)
+<img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/circuit.jpg)" alt="Circuit" title="Circuit" />
 Made with https://easyeda.com/
