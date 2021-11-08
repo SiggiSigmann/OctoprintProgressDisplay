@@ -14,32 +14,32 @@ To get Wifi-Conection a WifiManager form tzapu is used.
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/Display_ReadyToConnect.gif" alt="ReadyToConnect" title="ReadyToConnect" width="25%" style="transform:rotate(-90deg);"/>
 
 
-	1. Connect to wifi with the name **OctoPrintProgressDisplay**
+3. Connect to wifi with the name **OctoPrintProgressDisplay**
 <br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step1.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
 
-	2. Go to Sign in Page and selekt **Configure Wifi**
+4. Go to Sign in Page and selekt **Configure Wifi**
 <br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step2.jpg" alt="SignIn" title="SignIn" width="25%"/>
 
-	3. Connect to Wifi
+5. Connect to Wifi
 <br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step3.jpg" alt="ConnectToWifi" title="ConnectToWifi" width="25%"/>
 
-4. Done. The Connection will be stored to reuse next time
+6. Done. The Connection will be stored to reuse next time
 <br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/wifiManager_Step4.jpg" alt="Done" title="Done" width="25%"/>
 
-3.  If the devoice can't connect to Octoprint it will display error 
+7.  If the devoice can't connect to Octoprint it will display error 
 <br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/Display_error.jpg" alt="Error" title="Error" width="25%" style="transform:rotate(-90deg);"/>
 
-4. While heating it will start to draw ciruals. The circul will be complete when heating is done.<br>
+8. While heating it will start to draw ciruals. The circul will be complete when heating is done.<br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/Display_idel.jpg" alt="Heating" title="Heating" width="25%" style="transform:rotate(-90deg);"/>
 
-5. The display shows the progess in percent while printing
+9. The display shows the progess in percent while printing
 
-6. If Octoprint is in idel mode this will be displayed.<br>
+10. If Octoprint is in idel mode this will be displayed.<br>
 <img src="https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/Display_idel.jpg" alt="Idel" title="Idel" width="25%" style="transform:rotate(-90deg);"/>
 ## Circuit
 ![Circuit image](https://raw.githubusercontent.com/SiggiSigmann/OctoprintProgressDisplay/main/img/circuit.png)
