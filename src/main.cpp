@@ -11,6 +11,7 @@
 #define SHIFTPIN 13
 #define STOREPIN 15
 #define DATAPIN 2
+#define STOPPIN 12
 
 //wifi and connection
 WiFiManager wifiManager;
@@ -34,7 +35,7 @@ int printProgress = 0;
 byte isHeating[2] = {0,0}; //store if bed and hotend is heating
 #define BED 0
 #define HOTEND 1
-float bedTargetTemperature = 0;
+float bedTargetTemperature = 0;   //temperatures
 float bedCurrentTemperature = 0;
 float toolTargetTemperature = 0;
 float toolCurrentTemperature = 0;
@@ -104,10 +105,13 @@ int createnumber(int input){
 /**********************************************************************************************
  * update display
  **********************************************************************************************/
-
+//print heating progress as two circals
 void printHeatingProgress(){
+  //calc circelparts
   int bedProgress = int((6/bedTargetTemperature)*(bedCurrentTemperature));
   int toolProgress = int((6/toolTargetTemperature)*toolCurrentTemperature);
+
+  //correct output
   if(bedProgress<1 | bedProgress > 7){
     bedProgress=1;
   }
@@ -122,6 +126,7 @@ void printHeatingProgress(){
   printTo7Segment(((ringCodes[toolProgress-1])<<8)+(ringCodes[bedProgress-1]));
 }
 
+//print informations to display
 void printToDisplay(){
   if(displayError){
     errorTo7Segment();
@@ -196,6 +201,7 @@ void getTemperature(){
   http.end();
 }
 
+//update Temperature and calc if heating is on
 void updateTemperature(){
   getTemperature();
 
@@ -251,6 +257,46 @@ void updateJob(){
 /**********************************************************************************************
  * loop 
  **********************************************************************************************/
+//send command to stop job
+void sendStopCommand(){
+  /*POST /api/job HTTP/1.1
+  Host: example.com
+  Content-Type: application/json
+  X-Api-Key: abcdef...
+  {
+    "command": "start"
+  }*/
+
+  //get jobs
+  if(http.begin(client, String(HOST) + "/api/job")){
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Api-Key", String(APIKEY));
+    String httpRequestData = "{\n\"command\": \"start\"}";           
+    // Send HTTP POST request
+    int httpCode = http.POST(httpRequestData);
+
+    Serial.print("Send: ");
+    Serial.println(httpCode);
+
+    //process answere
+    if (httpCode != 0) {
+     
+    }else{
+      //print error
+      displayError = true;
+    }
+  }
+  http.end();
+}
+
+
+
+
+
+/**********************************************************************************************
+ * loop 
+ **********************************************************************************************/
+//display wifi connection animation (dot flashing)
 void wifiConnectingAnimation(){
   if((millis()-updateTimer) > BLINKTIMER){
     //make donts blink
@@ -261,6 +307,7 @@ void wifiConnectingAnimation(){
   }
 }
 
+//display status information
 void updateDisplay(){
   //get data and display it
   if((millis()-updateTimer) > UPDATETIME){
@@ -278,6 +325,10 @@ void loop() {
 
   if(isWificonnected){
     updateDisplay();
+
+    if(digitalRead(STOPPIN)){
+      sendStopCommand();
+    }
   }else{
     wifiConnectingAnimation();
 
@@ -320,6 +371,7 @@ void setupPins(){
   pinMode(STOREPIN, OUTPUT);
   pinMode(SHIFTPIN, OUTPUT);
   pinMode(DATAPIN, OUTPUT);
+  pinMode(STOPPIN, OUTPUT);
 }
 
 void setupDisplay(){
