@@ -1,88 +1,43 @@
 #include <Arduino.h>
-
-//wifi
 #include <ESP8266WiFi.h>
-
-//wifimanager
 #include <WiFiManager.h>
-
-//Rest client
 #include <ESP8266HTTPClient.h>
 #include <WiFiClient.h>
 #include <ArduinoJson.h>
-
-//SSID PWD OctoprintIP KEY
-#include "secrets.h"
+#include "secrets.h"        //SSID PWD OctoprintIP KEY
+#include "displayConsts.h"  //display encodings to draw to 7 Segments
 
 //connection to shiftregister
 #define SHIFTPIN 13
 #define STOREPIN 15
 #define DATAPIN 2
 
-#define DEBUG
-
-//store rest answere
-StaticJsonDocument<1200> apiAnswere;
-
-//drawing to display
-byte dotCode = B00000001;
-byte eCode = B11101100;
-byte rCode = B10001000;
-
-//Bxxxxxxx0
-// GFABEDC.
-byte numbersCodes[]= {B01111110, //0
-                      B00010010, //1
-                      B10111100, //2
-                      B10110110, //3
-                      B11010010, //4
-                      B11100110, //5
-                      B11101110, //6
-                      B00110010, //7
-                      B11111110, //8
-                      B11110110};//9
-
-byte ringCodes[]=  {B00000100,
-                    B00001100,
-                    B01001100,
-                    B01101100,
-                    B01111100,
-                    B01111110};
-
-#define BED 0
-#define HOTEND 1
-
-//octoprint
-const String apikey = APIKEY;
-const String host = HOST;
-
-//wifimanager
+//wifi and connection
 WiFiManager wifiManager;
-
-//clients
 WiFiClient client;
 HTTPClient http;
 
-//timer
+StaticJsonDocument<1200> apiAnswere; //store rest answere
+
+//softwaretimer
 #define UPDATETIME 500
 #define BLINKTIMER 100
 unsigned long updateTimer = 0;
 
-//isWificonnected
-boolean isWificonnected = 0;
-
-//count for waiting till wifi animation
-byte count = 0;
+boolean isWificonnected = 0;    //stored for connecteionanimation
+boolean showDot = false;
 
 //printing information
-boolean isError = false;
+boolean displayError = false;
 String jobState = "";
-int percentageOfPrint = 0;
-byte heating[2] = {0,0}; //store if bed and hotend is heating
+int printProgress = 0;
+byte isHeating[2] = {0,0}; //store if bed and hotend is heating
+#define BED 0
+#define HOTEND 1
 float bedTargetTemperature = 0;
-float bedIsTemperature = 0;
+float bedCurrentTemperature = 0;
 float toolTargetTemperature = 0;
-float toolIsTemperature = 0;
+float toolCurrentTemperature = 0;
 
 
 
@@ -95,24 +50,24 @@ float toolIsTemperature = 0;
 //value must resembel the encoding
 void printTo7Segment(int vlaue){
   digitalWrite(STOREPIN, LOW);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, (vlaue & 0xFF) | heating[BED]);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, ((vlaue & 0xFF00)>>8)| heating[HOTEND]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, (vlaue & 0xFF) | isHeating[BED]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, ((vlaue & 0xFF00)>>8)| isHeating[HOTEND]);
   digitalWrite(STOREPIN, HIGH);
 }
 
 //print "ER" to display
 void errorTo7Segment(){
   digitalWrite(STOREPIN, LOW);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, rCode| heating[BED]);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, eCode| heating[HOTEND]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, rCode| isHeating[BED]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, eCode| isHeating[HOTEND]);
   digitalWrite(STOREPIN, HIGH);
 }
 
 //print "_ _" to diaply
 void lowlineTo7Segment(){
   digitalWrite(STOREPIN, LOW);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| heating[BED]);
-  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| heating[HOTEND]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| isHeating[BED]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, 0x4| isHeating[HOTEND]);
   digitalWrite(STOREPIN, HIGH);
 }
 
@@ -127,7 +82,7 @@ void cleartSegment(){
 //create number to print
 int createnumber(int input){
   //process left Digit
-  int leftDigit = (input / 10)%100;
+  int leftDigit = (input / 10)%10;
   int leftDigitEncoding = numbersCodes[leftDigit]<<8;
   
   //process right digit
@@ -151,8 +106,8 @@ int createnumber(int input){
  **********************************************************************************************/
 
 void printHeatingProgress(){
-  int bedProgress = int((6/bedTargetTemperature)*(bedIsTemperature));
-  int toolProgress = int((6/toolTargetTemperature)*toolIsTemperature);
+  int bedProgress = int((6/bedTargetTemperature)*(bedCurrentTemperature));
+  int toolProgress = int((6/toolTargetTemperature)*toolCurrentTemperature);
   if(bedProgress<1 | bedProgress > 7){
     bedProgress=1;
   }
@@ -168,19 +123,19 @@ void printHeatingProgress(){
 }
 
 void printToDisplay(){
-  if(isError){
+  if(displayError){
     errorTo7Segment();
   }else{
     if(jobState.equals("Printing")){
-      if((toolTargetTemperature==0) || (bedTargetTemperature==0) || ((toolTargetTemperature-toolIsTemperature)>2)){
+      if((toolTargetTemperature==0) || (bedTargetTemperature==0) || ((toolTargetTemperature-toolCurrentTemperature)>2)){
         //printer heats up
         printHeatingProgress();
       }else{
         //display information (print progress)
-        printTo7Segment(createnumber(percentageOfPrint));
+        printTo7Segment(createnumber(printProgress));
       }
     }else if(jobState.equals("Cancelling") or jobState.equals("Operational") ){
-      if(((abs(toolTargetTemperature-toolIsTemperature))>2)| ((abs(bedTargetTemperature-bedIsTemperature))>2)){
+      if(((abs(toolTargetTemperature-toolCurrentTemperature))>2)| ((abs(bedTargetTemperature-bedCurrentTemperature))>2)){
         //printer is cooling down
         printHeatingProgress();
       }else{
@@ -203,7 +158,7 @@ void printToDisplay(){
 //get Termperature from Octoprint via rest call
 void getTemperature(){
   //make an api call for temperature
-  if(http.begin(client, host + "/api/printer?apikey=" + apikey)){
+  if(http.begin(client, String(HOST) + "/api/printer?apikey=" + String(APIKEY))){
 
     //process answere
     int httpCode = http.GET();
@@ -216,27 +171,27 @@ void getTemperature(){
         //handel and sktip
         if (error) {
           http.end();
-          isError = true;
+          displayError = true;
           return;
         }
         
         //pars json
-        JsonObject root = apiAnswere.as<JsonObject>();
-        bedTargetTemperature = root["temperature"]["bed"]["target"];
-        bedIsTemperature = root["temperature"]["bed"]["actual"];
-        toolTargetTemperature = root["temperature"]["tool0"]["target"];
-        toolIsTemperature = root["temperature"]["tool0"]["actual"];
+        JsonObject answere = apiAnswere.as<JsonObject>();
+        bedTargetTemperature = answere["temperature"]["bed"]["target"];
+        bedCurrentTemperature = answere["temperature"]["bed"]["actual"];
+        toolTargetTemperature = answere["temperature"]["tool0"]["target"];
+        toolCurrentTemperature = answere["temperature"]["tool0"]["actual"];
       }
     }else{
       //print error
-      isError = true;
+      displayError = true;
     }
   }else{
     //reset temperature
     bedTargetTemperature = 0;
-    bedIsTemperature = 0;
+    bedCurrentTemperature = 0;
     toolTargetTemperature = 0;
-    toolIsTemperature = 0;
+    toolCurrentTemperature = 0;
   }
   http.end();
 }
@@ -245,14 +200,14 @@ void updateTemperature(){
   getTemperature();
 
   //get if heeting is on
-  heating[0] = bedIsTemperature<bedTargetTemperature;
-  heating[1] = toolIsTemperature<toolTargetTemperature;
+  isHeating[0] = bedCurrentTemperature < bedTargetTemperature;
+  isHeating[1] = toolCurrentTemperature < toolTargetTemperature;
 }
 
 //get job percentage
 void updateJob(){
   //get jobs
-  if(http.begin(client, host + "/api/job?apikey=" + apikey)){
+  if(http.begin(client, String(HOST) + "/api/job?apikey=" + String(APIKEY))){
 
     //process answere
     int httpCode = http.GET();
@@ -264,24 +219,24 @@ void updateJob(){
         //check if answere is correct or skip
         if (error) {
           http.end();
-          isError = true;
+          displayError = true;
           jobState = "";
           return;
         }
         
-        JsonObject root = apiAnswere.as<JsonObject>();
+        JsonObject answere = apiAnswere.as<JsonObject>();
   
         //check if printing
-        jobState = String(root["state"]);
+        jobState = String(answere["state"]);
 
         if(jobState.equals("Printing")){
           //get progress in percent
-          percentageOfPrint = int(root["progress"]["completion"]);
+          printProgress = int(answere["progress"]["completion"]);
         }
       }
     }else{
       //print error
-      isError = true;
+      displayError = true;
     }
   }
   http.end();
@@ -299,11 +254,8 @@ void updateJob(){
 void wifiConnectingAnimation(){
   if((millis()-updateTimer) > BLINKTIMER){
     //make donts blink
-    printTo7Segment(dotCode<<(count*8));
-    count++;
-    if(count > 1){
-      count = 0;
-    }
+    printTo7Segment(dotCode<<(showDot*8));
+    showDot = !showDot;
 
     updateTimer = millis();
   }

@@ -1,3 +1,3 @@
-#define APIKEY "*****************************";
-#define HOST "http://***.***.***.***";
-#define PORT 80;
+#define APIKEY "*****************************"
+#define HOST "http://***.***.***.***"
+#define PORT 80
