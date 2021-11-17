@@ -233,7 +233,8 @@ void updateJob(){
         JsonObject answere = apiAnswere.as<JsonObject>();
   
         //check if printing
-        jobState = String(answere["state"]);
+        const char* sensor = answere["state"];
+        jobState = String(sensor);
 
         if(jobState.equals("Printing")){
           //get progress in percent
@@ -321,12 +322,12 @@ void updateDisplay(){
 }
 
 void loop() {
-  Serial.println(isWificonnected);
+  //Serial.println(isWificonnected);
 
   if(isWificonnected){
     updateDisplay();
 
-    if(digitalRead(STOPPIN)){
+    if(!digitalRead(STOPPIN)){
       sendStopCommand();
     }
   }else{
@@ -385,9 +386,11 @@ void setupWifi(){
   wifiManager.setBreakAfterConfig(true);
   wifiManager.setSaveParamsCallback(saveParamsCallback);
   wifiManager.setClass("invert"); // dark theme
+  wifiManager.setConnectTimeout(10);                               //wait max for 12 sec.
   if(wifiManager.autoConnect("OctoPrintProgressDisplay")){
     isWificonnected = 1;
     Serial.println(WiFi.localIP());
+    cleartSegment();
   }
 }
 
