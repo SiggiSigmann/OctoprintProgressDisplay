@@ -260,6 +260,7 @@ void updateJob(){
  **********************************************************************************************/
 //send command to stop job
 void sendStopCommand(){
+  Serial.println("stoooooop");
   /*POST /api/job HTTP/1.1
   Host: example.com
   Content-Type: application/json
@@ -269,15 +270,16 @@ void sendStopCommand(){
   }*/
 
   //get jobs
-  if(http.begin(client, String(HOST) + "/api/job")){
+  if(http.begin(client, String(HOST) + "/api/printer/command")){
     http.addHeader("Content-Type", "application/json");
     http.addHeader("X-Api-Key", String(APIKEY));
-    String httpRequestData = "{\n\"command\": \"start\"}";           
+    String httpRequestData = "{\n\t\"command\": \"M112\"\n}";           
     // Send HTTP POST request
     int httpCode = http.POST(httpRequestData);
 
     Serial.print("Send: ");
     Serial.println(httpCode);
+    Serial.println(http.getString());
 
     //process answere
     if (httpCode != 0) {
@@ -327,7 +329,7 @@ void loop() {
   if(isWificonnected){
     updateDisplay();
 
-    if(!digitalRead(STOPPIN)){
+    if(digitalRead(STOPPIN)){
       sendStopCommand();
     }
   }else{
