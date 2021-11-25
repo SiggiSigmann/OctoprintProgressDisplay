@@ -7,6 +7,9 @@
 #include "secrets.h"        //SSID PWD OctoprintIP KEY
 #include "displayConsts.h"  //display encodings to draw to 7 Segments
 
+#define PUTKEYINBODY true
+#define PUTKEYINHEADER false
+
 //connection to shiftregister
 #define SHIFTPIN 13
 #define STOREPIN 15
@@ -18,7 +21,11 @@ WiFiManager wifiManager;
 WiFiClient client;
 HTTPClient http;
 
-StaticJsonDocument<1200> apiAnswere; //store rest answere
+//api answere data
+struct ApiAnswere{
+  StaticJsonDocument<1200> jsonData; //store rest answere
+  int httpResponseCode;
+} apiAnswere;
 
 //softwaretimer
 #define UPDATETIME 500
@@ -27,6 +34,7 @@ unsigned long updateTimer = 0;
 
 boolean isWificonnected = 0;    //stored for connecteionanimation
 boolean showDot = false;
+boolean emergencyFailes = false;
 
 //printing information
 boolean displayError = false;
@@ -62,6 +70,20 @@ void errorTo7Segment(){
   shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, rCode| isHeating[BED]);
   shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, eCode| isHeating[HOTEND]);
   digitalWrite(STOREPIN, HIGH);
+
+  Serial.print("error: ");
+  Serial.println(apiAnswere.httpResponseCode);
+}
+
+//print "EE" to display
+void emergencyTo7Segment(){
+  digitalWrite(STOREPIN, LOW);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, eCode| isHeating[BED]);
+  shiftOut(DATAPIN, SHIFTPIN, MSBFIRST, eCode| isHeating[HOTEND]);
+  digitalWrite(STOREPIN, HIGH);
+
+  Serial.print("error: ");
+  Serial.println(apiAnswere.httpResponseCode);
 }
 
 //print "_ _" to diaply
@@ -112,11 +134,11 @@ void printHeatingProgress(){
   int toolProgress = int((6/toolTargetTemperature)*toolCurrentTemperature);
 
   //correct output
-  if(bedProgress<1 | bedProgress > 7){
+  if((bedProgress<1) || (bedProgress > 7)){
     bedProgress=1;
   }
 
-  if(bedProgress<1 | toolProgress > 7){
+  if((bedProgress<1) || (toolProgress > 7)){
     toolProgress=1;
   }
   
@@ -160,45 +182,79 @@ void printToDisplay(){
 /**********************************************************************************************
  * api / update methods
  **********************************************************************************************/
-//get Termperature from Octoprint via rest call
-void getTemperature(){
-  //make an api call for temperature
-  if(http.begin(client, String(HOST) + "/api/printer?apikey=" + String(APIKEY))){
+String createLink(String link, boolean putKeyInBody){
+  String linkToInvoke = String(HOST) + link;
+  if(!putKeyInBody){
+    linkToInvoke += "?apikey=" + String(APIKEY);
+  }
+  return linkToInvoke;
+}
+
+void apiCall(String link, boolean putKeyInBody=false, String command = ""){
+  String linkToInvoke = createLink(link, putKeyInBody);
+  Serial.println(linkToInvoke);
+
+  if(http.begin(client, linkToInvoke)){
+
+    if(putKeyInBody){
+      http.addHeader("Content-Type","application/json");
+      http.addHeader("X-Api-Key",String(APIKEY));
+
+      String payload="";
+      if(!command.isEmpty()){
+        payload = "{\n\t\"command\": \""+ command +"\"\n}";   
+      }
+
+      apiAnswere.httpResponseCode = http.POST(payload);
+    }else{
+      apiAnswere.httpResponseCode = http.GET();
+    }
 
     //process answere
-    int httpCode = http.GET();
-    if (httpCode > 0) {
-      if (httpCode == HTTP_CODE_OK){
+    if (apiAnswere.httpResponseCode > 0) {
+      if (apiAnswere.httpResponseCode == HTTP_CODE_OK){
         //get payload
         String payload = http.getString();
-        DeserializationError error = deserializeJson(apiAnswere, payload);
-        
+        DeserializationError error = deserializeJson(apiAnswere.jsonData, payload);
+
         //handel and sktip
         if (error) {
           http.end();
-          displayError = true;
-          return;
+          Serial.println(payload);
+          apiAnswere.httpResponseCode = 1001;
         }
-        
-        //pars json
-        JsonObject answere = apiAnswere.as<JsonObject>();
-        bedTargetTemperature = answere["temperature"]["bed"]["target"];
-        bedCurrentTemperature = answere["temperature"]["bed"]["actual"];
-        toolTargetTemperature = answere["temperature"]["tool0"]["target"];
-        toolCurrentTemperature = answere["temperature"]["tool0"]["actual"];
       }
-    }else{
-      //print error
-      displayError = true;
+    }
+    http.end();
+  }else{
+    apiAnswere.httpResponseCode = 1000;
+  }
+}
+
+
+//get Termperature from Octoprint via rest call
+void getTemperature(){
+  bedTargetTemperature = 0;
+  bedCurrentTemperature = 0;
+  toolTargetTemperature = 0;
+  toolCurrentTemperature = 0;
+
+  //make an api call for temperature
+  apiCall("/api/printer");
+  
+  if (apiAnswere.httpResponseCode > 0) {
+    if (apiAnswere.httpResponseCode == HTTP_CODE_OK){
+      //pars json
+      JsonObject answere = apiAnswere.jsonData.as<JsonObject>();
+      bedTargetTemperature = answere["temperature"]["bed"]["target"];
+      bedCurrentTemperature = answere["temperature"]["bed"]["actual"];
+      toolTargetTemperature = answere["temperature"]["tool0"]["target"];
+      toolCurrentTemperature = answere["temperature"]["tool0"]["actual"];
     }
   }else{
-    //reset temperature
-    bedTargetTemperature = 0;
-    bedCurrentTemperature = 0;
-    toolTargetTemperature = 0;
-    toolCurrentTemperature = 0;
+    //print error
+    displayError = true;
   }
-  http.end();
 }
 
 //update Temperature and calc if heating is on
@@ -212,41 +268,25 @@ void updateTemperature(){
 
 //get job percentage
 void updateJob(){
-  //get jobs
-  if(http.begin(client, String(HOST) + "/api/job?apikey=" + String(APIKEY))){
+  apiCall("/api/job");
 
-    //process answere
-    int httpCode = http.GET();
-    if (httpCode > 0) {
-      if (httpCode == HTTP_CODE_OK){
-        String payload = http.getString();
-        DeserializationError error = deserializeJson(apiAnswere, payload);
-        
-        //check if answere is correct or skip
-        if (error) {
-          http.end();
-          displayError = true;
-          jobState = "";
-          return;
-        }
-        
-        JsonObject answere = apiAnswere.as<JsonObject>();
-  
-        //check if printing
-        const char* sensor = answere["state"];
-        jobState = String(sensor);
+  if (apiAnswere.httpResponseCode > 0) {
+    if (apiAnswere.httpResponseCode == HTTP_CODE_OK){
+      JsonObject answere = apiAnswere.jsonData.as<JsonObject>();
 
-        if(jobState.equals("Printing")){
-          //get progress in percent
-          printProgress = int(answere["progress"]["completion"]);
-        }
+      //check if printing
+      const char* sensor = answere["state"];
+      jobState = String(sensor);
+
+      if(jobState.equals("Printing")){
+        //get progress in percent
+        printProgress = int(answere["progress"]["completion"]);
       }
-    }else{
-      //print error
-      displayError = true;
     }
+  }else{
+    //print error
+    displayError = true;
   }
-  http.end();
 }
 
 
@@ -260,36 +300,24 @@ void updateJob(){
  **********************************************************************************************/
 //send command to stop job
 void sendStopCommand(){
-  Serial.println("stoooooop");
-  /*POST /api/job HTTP/1.1
-  Host: example.com
-  Content-Type: application/json
-  X-Api-Key: abcdef...
-  {
-    "command": "start"
-  }*/
+  do{
+    emergencyFailes= true;
 
-  //get jobs
-  if(http.begin(client, String(HOST) + "/api/printer/command")){
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("X-Api-Key", String(APIKEY));
-    String httpRequestData = "{\n\t\"command\": \"M112\"\n}";           
-    // Send HTTP POST request
-    int httpCode = http.POST(httpRequestData);
-
-    Serial.print("Send: ");
-    Serial.println(httpCode);
-    Serial.println(http.getString());
+    apiCall("/api/printer", PUTKEYINBODY,"M112");
 
     //process answere
-    if (httpCode != 0) {
-     
+    if(apiAnswere.httpResponseCode == HTTP_CODE_OK || apiAnswere.httpResponseCode == HTTP_CODE_NO_CONTENT) {
+        Serial.print("Send: ");
+        Serial.println(apiAnswere.httpResponseCode);
+        Serial.println(http.getString());
+        emergencyFailes= false;
     }else{
       //print error
       displayError = true;
+      emergencyTo7Segment();
     }
-  }
-  http.end();
+  }while(emergencyFailes);
+
 }
 
 
